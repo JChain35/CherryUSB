@@ -17,9 +17,11 @@ url: https://github.com/cherry-embedded/CherryUSB
 repository: https://github.com/cherry-embedded/CherryUSB.git
 documentation: https://cherryusb.readthedocs.io/
 issues: https://github.com/cherry-embedded/CherryUSB/issues
-dependencies:
-  idf: ">=5.0"
-targets:
-  - esp32s2
-  - esp32s3
-  - esp32p4
+
+# use cmake file to decide the idf version and targets
+#dependencies:
+#  idf: ">=5.0"
+#targets:
+#  - esp32s2
+#  - esp32s3
+#  - esp32p4
