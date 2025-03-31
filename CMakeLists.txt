@@ -66,6 +66,8 @@ sdk_src(platform/none/usbh_lwip.c)
 
 elseif(ESP_PLATFORM)
 
+if (IDF_VERSION_MAJOR EQUAL 5 AND IDF_VERSION_MINOR GREATER_EQUAL 1 AND NOT ${IDF_TARGET} STREQUAL "esp32")
+
 set(CONFIG_CHERRYUSB_DEVICE_DCD "dwc2_esp")
 set(CONFIG_CHERRYUSB_HOST_HCD "dwc2_esp")
 set(CONFIG_CHERRYUSB_OSAL "idf")
@@ -76,9 +78,11 @@ set(ldfragments "osal/idf/linker.lf")
 
 if(CONFIG_CHERRYUSB_HOST_CDC_ECM OR CONFIG_CHERRYUSB_HOST_CDC_RNDIS OR CONFIG_CHERRYUSB_HOST_CDC_NCM
 OR CONFIG_CHERRYUSB_HOST_ASIX OR CONFIG_CHERRYUSB_HOST_RTL8152 OR CONFIG_CHERRYUSB_HOST_BL616)
-list(APPEND cherryusb_srcs platform/none/usbh_lwip.c)
-idf_component_get_property(lwip lwip COMPONENT_LIB)
-target_compile_definitions(${lwip} PRIVATE "-DPBUF_POOL_BUFSIZE=1600")
+if (CONFIG_CHERRYUSB_HOST_RTL8152)
+    list(APPEND cherryusb_srcs platform/none/usbh_esp32.c)
+else()
+    list(APPEND cherryusb_srcs platform/esp/usbh_lwip.c)
+endif()
 endif()
 
 idf_component_get_property(freertos_include freertos ORIG_INCLUDE_PATH)
@@ -87,7 +91,13 @@ idf_component_register(SRCS ${cherryusb_srcs}
     INCLUDE_DIRS ${cherryusb_incs} ${freertos_include}
     PRIV_REQUIRES usb
     LDFRAGMENTS  ${ldfragments}
+    REQUIRES esp_netif
 )
+
+if(CONFIG_CHERRYUSB_HOST_CDC_ECM OR CONFIG_CHERRYUSB_HOST_CDC_RNDIS OR CONFIG_CHERRYUSB_HOST_CDC_NCM
+OR CONFIG_CHERRYUSB_HOST_ASIX OR CONFIG_CHERRYUSB_HOST_RTL8152 OR CONFIG_CHERRYUSB_HOST_BL616)
+target_compile_definitions(${COMPONENT_LIB} PRIVATE "-DPBUF_POOL_BUFSIZE=1600")
+endif()
 
 if(CONFIG_CHERRYUSB_HOST)
     target_linker_script(${COMPONENT_LIB} INTERFACE "osal/idf/usbh_class_info.ld")
@@ -152,4 +162,5 @@ if(CONFIG_CHERRYUSB)
         PROPERTIES COMPILE_FLAGS
         -Wno-maybe-uninitialized)
 endif()
+endif() # IDF_VERSION_MAJOR EQUAL 5 AND IDF_VERSION_MINOR GREATER_EQUAL 1
 endif()
