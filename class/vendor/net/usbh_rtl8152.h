@@ -84,6 +84,9 @@ int usbh_rtl8152_eth_tx(uint8_t *buf, uint32_t buflen);
 
 void usbh_rtl8152_rx_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV);
 
+int usbh_rtl8152_read_mac(unsigned char *mac);
+int usbh_rtl8152_write_mac(unsigned char *mac);
+
 #ifdef __cplusplus
 }
 #endif
