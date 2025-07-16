@@ -164,7 +164,7 @@ static esp_err_t netif_transmit(void *h, void *buffer, size_t len) {
     ret = usbh_rtl8152_eth_tx(buffer, len);
     if (ret != 0 ) {
         if( ret == -USB_ERR_NOTCONN ) {
-            ESP_LOGW(TAG, "Wait USB Ethernet Link UP, %d", ret);
+            ESP_LOGD(TAG, "Wait USB Ethernet Link UP, %d", ret);
         } else {
             ESP_LOGE(TAG, "Failed to tx, %d", ret);
         }
