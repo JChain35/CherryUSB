@@ -264,7 +264,7 @@ void usbh_rtl8152_run(struct usbh_rtl8152 *rtl8152_class) {
         esp_netif_action_start(usbh_netif, 0, 0, 0);
 
         while (!esp_netif_is_netif_up(usbh_netif)) {
-            ESP_LOGW(TAG, "Waiting for netif to be up...");
+            ESP_LOGD(TAG, "Waiting for netif to be up...");
             usb_osal_msleep(1000);
         }
         ESP_LOGI(TAG, "Ethernet Link Up");
