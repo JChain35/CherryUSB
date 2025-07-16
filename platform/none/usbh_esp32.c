@@ -267,7 +267,7 @@ void usbh_rtl8152_run(struct usbh_rtl8152 *rtl8152_class) {
             ESP_LOGD(TAG, "Waiting for netif to be up...");
             usb_osal_msleep(1000);
         }
-        ESP_LOGI(TAG, "Ethernet Link Up");
+        ESP_LOGI(TAG, "esp netif is up");
 
         usb_osal_thread_create("usbh_rtl8152_rx", 2048*5, CONFIG_USBHOST_PSC_PRIO + 1, usbh_rtl8152_rx_thread, NULL);
 
