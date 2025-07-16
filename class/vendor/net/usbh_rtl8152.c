@@ -2686,6 +2686,16 @@ int r8152_write_hwaddr(struct usbh_rtl8152 *tp, unsigned char *mac)
     return 0;
 }
 
+int r8152_read_hwaddr(struct usbh_rtl8152 *tp, unsigned char *mac)
+{
+    unsigned char enetaddr[8] = { 0 };
+    ocp_write_byte(tp, MCU_TYPE_PLA, PLA_CRWECR, CRWECR_CONFIG);
+    pla_ocp_read(tp, PLA_IDR, 8, enetaddr);
+    ocp_write_byte(tp, MCU_TYPE_PLA, PLA_CRWECR, CRWECR_NORAML);
+    memcpy(mac, enetaddr, 8);
+    return 0;
+}
+
 int usbh_rtl8152_get_connect_status(struct usbh_rtl8152 *rtl8152_class)
 {
     int ret;
@@ -2796,6 +2806,36 @@ static int usbh_rtl8152_connect(struct usbh_hubport *hport, uint8_t intf)
                  rtl8152_class->mac[4],
                  rtl8152_class->mac[5]);
 
+    if( rtl8152_class->version == RTL_VER_02 ) {
+        uint32_t u32Data = 0xBB; // 10M/100M LED Mode, LINK and ACT
+        ret = ocp_write_word(rtl8152_class, MCU_TYPE_PLA, PLA_LEDSEL, u32Data);
+        if (ret < 0) {
+            USB_LOG_ERR("Failed to write LEDSEL register\r\n");
+        }
+        usb_osal_msleep(1);
+        ret = ocp_read_word(rtl8152_class, MCU_TYPE_PLA, PLA_LEDSEL, &u32Data);
+        if (ret < 0) {
+            USB_LOG_ERR("Failed to read LEDSEL register\r\n");
+        }
+        else {
+            USB_LOG_INFO("LEDSEL register value: 0x%04x\r\n", u32Data);
+        }
+
+        u32Data = 0x3A; // 10M/100M LED Mode, LINK and ACT
+        ret = ocp_write_word(rtl8152_class, MCU_TYPE_PLA, PLA_LED_FEATURE, u32Data);
+        if (ret < 0) {
+            USB_LOG_ERR("Failed to write PLA_LED_FEATURE register\r\n");
+        }
+        usb_osal_msleep(1);
+        ret = ocp_read_word(rtl8152_class, MCU_TYPE_PLA, PLA_LED_FEATURE, &u32Data);
+        if (ret < 0) {
+            USB_LOG_ERR("Failed to read PLA_LED_FEATURE register\r\n");
+        }
+        else {
+            USB_LOG_INFO("PLA_LED_FEATURE register value: 0x%04x\r\n", u32Data);
+        }
+    }
+    
     for (uint8_t i = 0; i < hport->config.intf[intf].altsetting[0].intf_desc.bNumEndpoints; i++) {
         ep_desc = &hport->config.intf[intf].altsetting[0].ep[i].ep_desc;
 
