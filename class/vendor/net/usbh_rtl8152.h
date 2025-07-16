@@ -6,6 +6,10 @@
 #ifndef USBH_RTL8152_H
 #define USBH_RTL8152_H
 
+#include "common/usb_list.h"
+#include "common/usb_hc.h"
+#include "common/usb_osal.h"
+
 struct usbh_rtl8152 {
     struct usbh_hubport *hport;
     struct usb_endpoint_descriptor *bulkin;  /* Bulk IN endpoint */
