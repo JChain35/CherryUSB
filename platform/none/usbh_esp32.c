@@ -43,6 +43,9 @@
 #define USBH_IFNAME0 'u'
 #define USBH_IFNAME1 'e'
 
+void (*_usbh_task_pre_run)(struct usbh_rtl8152 *rtl8152_class, void *arg) = NULL;
+void *_usbh_task_pre_run_arg = NULL;
+
 static esp_netif_t *usbh_netif = NULL;
 
 static err_t usbh_eth_low_level_output(struct netif *netif, struct pbuf *p) {
@@ -247,6 +250,11 @@ void usbh_rtl8152_run(struct usbh_rtl8152 *rtl8152_class) {
             ESP_LOGE(TAG, "%s:L%d, Failed to create netif", __func__, __LINE__);
             break;
         }
+
+        if( _usbh_task_pre_run != NULL) {
+            _usbh_task_pre_run(rtl8152_class, _usbh_task_pre_run_arg);
+        }
+
         ret = esp_netif_set_mac( usbh_netif, rtl8152_class->mac);
         if( ret != ESP_OK ) {
             ESP_LOGE(TAG, "%s:L%d, Failed to set MAC", __func__, __LINE__);
