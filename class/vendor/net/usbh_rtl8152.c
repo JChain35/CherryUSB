@@ -2993,6 +2993,16 @@ uint8_t *usbh_rtl8152_get_eth_txbuf(void)
     return (g_rtl8152_tx_buffer + sizeof(struct tx_desc));
 }
 
+int usbh_rtl8152_write_mac(unsigned char *mac)
+{
+    return r8152_write_hwaddr(&g_rtl8152_class, mac);
+}
+
+int usbh_rtl8152_read_mac(unsigned char *mac)
+{
+    return r8152_read_hwaddr(&g_rtl8152_class, mac);
+}
+
 int usbh_rtl8152_eth_output(uint32_t buflen)
 {
     struct tx_desc *tx_desc;
