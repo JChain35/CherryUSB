@@ -1729,6 +1729,7 @@ static int rtl_reset_bmu(struct usbh_rtl8152 *tp)
     int ret;
 
     switch (tp->version) {
+        case RTL_VER_02:
         case RTL_VER_03:
         case RTL_VER_04:
         case RTL_VER_05:
@@ -2413,12 +2414,34 @@ static int r8152b_init(struct usbh_rtl8152 *tp)
 {
     uint32_t ocp_data;
     uint16_t data;
+    uint16_t count = 0;
 
     data = r8152_mdio_read(tp, MII_BMCR);
     if (data & BMCR_PDOWN) {
         data &= ~BMCR_PDOWN;
         r8152_mdio_write(tp, MII_BMCR, data);
     }
+
+    // reset bmcr 
+    data = r8152_mdio_read(tp, MII_BMCR);
+    data |= BMCR_RESET;
+    r8152_mdio_write(tp, MII_BMCR, data);
+
+    while (1) {
+        data = r8152_mdio_read(tp, MII_BMCR);
+        if (!(data & BMCR_RESET)) {
+            USB_LOG_INFO("rtl815x reset finish 1\r\n");
+            break;
+        }
+        if( count > 100) {
+            USB_LOG_INFO("rtl815x reset finish 2\r\n");
+            break;
+        }
+        count = count + 1;
+        usb_osal_msleep(10);
+    }
+    usb_osal_msleep(100);
+
 
     r8152_aldps_en(tp, false);
 
@@ -2892,6 +2915,64 @@ static int usbh_rtl8152_disconnect(struct usbh_hubport *hport, uint8_t intf)
     return ret;
 }
 
+void usbh_rtl8152_status_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV) {
+#defined RTL8152_LINK_DOWN_COUNT 2
+    uint8_t lask_link_status = 0, link_status = 0;
+    uint8_t link_down_count = 0;
+    uint16_t data = 0;
+    uint8_t reinit = 0;
+    int ret = 0;
+
+    while (1) {
+        USB_LOG_DBG("Get connect status\r\n");
+        ret = usbh_rtl8152_get_connect_status(&g_rtl8152_class);
+        if (ret < 0) {
+            USB_LOG_DBG("Get connect status failed, ret:%d\r\n", ret);
+        }
+        else {
+            if( g_rtl8152_class.connect_status ) {
+                USB_LOG_DBG("RTL8152 connect status is true\r\n");
+            }
+            else {
+                USB_LOG_DBG("RTL8152 connect status is false\r\n");
+            }
+        }
+        usb_osal_msleep(500);
+
+        data = r8152_mdio_read(&g_rtl8152_class, MII_BMSR);
+        link_status = (data & BMSR_LSTATUS) > 0 ? 1 : 0;
+        if( lask_link_status != link_status ) {
+            USB_LOG_DBG("RTL8152 link state change from %s to %s\r\n", lask_link_status ? "up" : "down", link_status ? "up" : "down");
+            if (lask_link_status == 0 && link_status == 1) {
+                USB_LOG_INFO("RTL8152 1 link is up\r\n");
+                lask_link_status = link_status;
+                link_down_count = 0;
+                if( reinit ) {
+                    if (g_rtl8152_class.rtl_ops.disable) {
+                        g_rtl8152_class.rtl_ops.disable(&g_rtl8152_class);
+                    }
+                    usb_osal_msleep(1000);
+                    if (g_rtl8152_class.rtl_ops.enable) {
+                        g_rtl8152_class.rtl_ops.enable(&g_rtl8152_class);
+                    }
+                    rtl8152_set_rx_mode(&g_rtl8152_class);
+                }
+            } else if (lask_link_status == 1 && link_status == 0) {
+                link_down_count = link_down_count + 1;
+                if( link_down_count > RTL8152_LINK_DOWN_COUNT ) {
+                    USB_LOG_INFO("RTL8152 1 link is down %d\r\n", link_down_count);
+                    lask_link_status = link_status;
+                    USB_LOG_DBG("RTL8152 1 link is down, please check the cable\r\n");
+                    reinit = 1;
+                    link_down_count = 0;
+                }
+            }
+        }
+        usb_osal_msleep(500);
+    }
+}
+
+
 void usbh_rtl8152_rx_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV)
 {
     uint32_t g_rtl8152_rx_length;
@@ -2906,21 +2987,19 @@ void usbh_rtl8152_rx_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV)
 
     (void)CONFIG_USB_OSAL_THREAD_GET_ARGV;
     USB_LOG_INFO("Create rtl8152 rx thread\r\n");
+    usb_osal_thread_create("usbh_rtl8152_status", 2048*5, CONFIG_USBHOST_PSC_PRIO + 1, usbh_rtl8152_status_thread, NULL);
     // clang-format off
 find_class:
     // clang-format on
     g_rtl8152_class.connect_status = false;
     if (usbh_find_class_instance("/dev/rtl8152") == NULL) {
+        USB_LOG_ERR("RTL8152 class not found\r\n");
         goto delete;
     }
 
     while (g_rtl8152_class.connect_status == false) {
-        ret = usbh_rtl8152_get_connect_status(&g_rtl8152_class);
-        if (ret < 0) {
-            usb_osal_msleep(100);
-            goto find_class;
-        }
-        usb_osal_msleep(128);
+        // Modify to status thread
+        usb_osal_msleep(200);
     }
 
     if (g_rtl8152_class.rtl_ops.enable) {
@@ -2937,6 +3016,10 @@ find_class:
         usbh_bulk_urb_fill(&g_rtl8152_class.bulkin_urb, g_rtl8152_class.hport, g_rtl8152_class.bulkin, &g_rtl8152_rx_buffer[g_rtl8152_rx_length], transfer_size, USB_OSAL_WAITING_FOREVER, NULL, NULL);
         ret = usbh_submit_urb(&g_rtl8152_class.bulkin_urb);
         if (ret < 0) {
+            USB_LOG_ERR("USBH Rx Submit bulkin urb failed, ret:%d\r\n", ret);
+            if( ret == -USB_ERR_NAK) {
+                continue;
+            }
             goto find_class;
         }
 
