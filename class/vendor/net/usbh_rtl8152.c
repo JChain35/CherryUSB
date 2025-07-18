@@ -2916,7 +2916,7 @@ static int usbh_rtl8152_disconnect(struct usbh_hubport *hport, uint8_t intf)
 }
 
 void usbh_rtl8152_status_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV) {
-#defined RTL8152_LINK_DOWN_COUNT 2
+#define RTL8152_LINK_DOWN_COUNT 2
     uint8_t lask_link_status = 0, link_status = 0;
     uint8_t link_down_count = 0;
     uint16_t data = 0;
