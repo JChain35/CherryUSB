@@ -5,24 +5,117 @@
  */
 #include "usb_osal.h"
 #include "usb_errno.h"
+#include "esp_log.h"
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
+#include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "esp_heap_caps.h"
+
+#define TAG "usb_osal_idf"
 
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
+#if defined CONFIG_SPIRAM && CONFIG_SPIRAM
+#define MAX_OSAL_TASKS 8
+
+struct usb_osal_static_task {
+    TaskHandle_t task;
+    StackType_t *stack;
+    StaticTask_t *tcb;
+};
+struct usb_osal_static_task *osal_task = NULL;
+static uint8_t osal_task_count = 0;
+#endif
+
 usb_osal_thread_t usb_osal_thread_create(const char *name, uint32_t stack_size, uint32_t prio, usb_thread_entry_t entry, void *args)
 {
-    TaskHandle_t htask = NULL;
+    TaskHandle_t task = NULL;
+#if defined CONFIG_SPIRAM && CONFIG_SPIRAM
+    ESP_LOGE(TAG, "Creating Static Task : name:%s", name);
+    if( osal_task == NULL ) {
+        osal_task = (struct usb_osal_static_task *)heap_caps_malloc(MAX_OSAL_TASKS * sizeof(struct usb_osal_static_task), MALLOC_CAP_SPIRAM);
+        if( osal_task == NULL ) {
+            ESP_LOGE(TAG, "Failed to allocate memory for OSAL tasks");
+            return NULL;
+        }
+        memset(osal_task, 0, MAX_OSAL_TASKS * sizeof(struct usb_osal_static_task));
+    }
+
+    if( osal_task_count >= MAX_OSAL_TASKS ) {
+        ESP_LOGE(TAG, "Maximum number of OSAL tasks reached %d", MAX_OSAL_TASKS);
+        return NULL;
+    }
+    
+    osal_task[osal_task_count].stack = (StackType_t *)heap_caps_malloc(stack_size, MALLOC_CAP_SPIRAM);
+    if( osal_task[osal_task_count].stack == NULL ) {
+        ESP_LOGE(TAG, "Failed to allocate stack memory for task %s, size %"PRIu32"", name, stack_size);
+        return NULL;
+    }
+    osal_task[osal_task_count].tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL);
+    if( osal_task[osal_task_count].tcb == NULL ) {
+        ESP_LOGE(TAG, "Failed to allocate TCB memory for task %s, %d", name, sizeof(StaticTask_t));
+        free(osal_task[osal_task_count].tcb);
+        return NULL;
+    }
+
+    osal_task[osal_task_count].task = NULL;
     stack_size /= sizeof(StackType_t);
-    xTaskCreate(entry, name, stack_size, args, configMAX_PRIORITIES - 1 - prio, &htask);
-    return (usb_osal_thread_t)htask;
+    osal_task[osal_task_count].task = xTaskCreateStatic(entry, name, stack_size, args, 
+        configMAX_PRIORITIES - 1 - prio, osal_task[osal_task_count].stack, osal_task[osal_task_count].tcb);
+    if( osal_task[osal_task_count].task == NULL ) {
+        ESP_LOGE(TAG, "Failed to create task %s", name);
+        free(osal_task[osal_task_count].stack);
+        free(osal_task[osal_task_count].tcb);
+        return NULL;
+    }
+
+    task = osal_task[osal_task_count].task;
+    osal_task_count = osal_task_count + 1;
+#else
+    ESP_LOGE(TAG, "Creating Task : name:%s", name);
+    xTaskCreate(entry, name, stack_size, args, configMAX_PRIORITIES - 1 - prio, &task);
+    if (task == NULL) {
+        ESP_LOGE(TAG, "Failed to create task %s", name);
+        return NULL;
+    }
+#endif
+    return (usb_osal_thread_t)task;
 }
 
 void usb_osal_thread_delete(usb_osal_thread_t thread)
 {
-    vTaskDelete(thread);
+    if (thread == NULL) {
+        ESP_LOGE(TAG, "Thread is NULL, cannot delete.");
+        return;
+    }
+
+#if defined CONFIG_SPIRAM && CONFIG_SPIRAM
+    for (uint8_t i = 0; i < osal_task_count; i++) {
+        if (osal_task[i].task == thread) {
+            vTaskDelete(osal_task[i].task);
+            free(osal_task[i].stack);
+            free(osal_task[i].tcb);
+            osal_task[i].task = NULL;
+            osal_task[i].stack = NULL;
+            osal_task[i].tcb = NULL;
+
+            // Shift remaining tasks down
+            for (uint8_t j = i; j < osal_task_count - 1; j++) {
+                osal_task[j] = osal_task[j + 1];
+            }
+            osal_task_count--;
+            return;
+        }
+    }
+    ESP_LOGE(TAG, "Thread not found in OSAL task list, cannot delete.");
+#else
+    vTaskDelete((TaskHandle_t)thread);
+#endif
 }
 
 usb_osal_sem_t usb_osal_sem_create(uint32_t initial_count)
