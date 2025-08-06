@@ -71,6 +71,22 @@ struct usbh_rtl8152 {
     void *user_data;
 };
 
+struct usbh_rtl8152_tally_counter {
+	uint64_t tx_packets;
+	uint64_t rx_packets;
+	uint64_t tx_errors;
+	uint32_t rx_errors;
+	uint16_t rx_missed;
+	uint16_t align_errors;
+	uint32_t tx_one_collision;
+	uint32_t tx_multi_collision;
+	uint64_t rx_unicast;
+	uint64_t rx_broadcast;
+	uint32_t rx_multicast;
+	uint16_t tx_aborted;
+	uint16_t tx_underrun;
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -90,6 +106,10 @@ void usbh_rtl8152_rx_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV);
 
 int usbh_rtl8152_read_mac(unsigned char *mac);
 int usbh_rtl8152_write_mac(unsigned char *mac);
+
+int usbh_rtl8152_tally_reset(void);
+int usbh_rtl8152_tally_get(struct usbh_rtl8152_tally_counter *tally);
+
 
 #ifdef __cplusplus
 }
