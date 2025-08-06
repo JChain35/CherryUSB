@@ -36,7 +36,6 @@ usb_osal_thread_t usb_osal_thread_create(const char *name, uint32_t stack_size, 
 {
     TaskHandle_t task = NULL;
 #if defined CONFIG_SPIRAM && CONFIG_SPIRAM
-    ESP_LOGE(TAG, "Creating Static Task : name:%s", name);
     if( osal_task == NULL ) {
         osal_task = (struct usb_osal_static_task *)heap_caps_malloc(MAX_OSAL_TASKS * sizeof(struct usb_osal_static_task), MALLOC_CAP_SPIRAM);
         if( osal_task == NULL ) {
@@ -77,7 +76,6 @@ usb_osal_thread_t usb_osal_thread_create(const char *name, uint32_t stack_size, 
     task = osal_task[osal_task_count].task;
     osal_task_count = osal_task_count + 1;
 #else
-    ESP_LOGE(TAG, "Creating Task : name:%s", name);
     xTaskCreate(entry, name, stack_size, args, configMAX_PRIORITIES - 1 - prio, &task);
     if (task == NULL) {
         ESP_LOGE(TAG, "Failed to create task %s", name);
