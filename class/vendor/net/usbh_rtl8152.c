@@ -969,6 +969,81 @@ enum rtl_version {
 #define AUTONEG_DISABLE 0x00
 #define AUTONEG_ENABLE  0x01
 
+typedef union {
+    struct {
+        uint32_t reserved : 6;          /*!< Reserved */
+        uint32_t speed_select1 : 1;      /*!< Select speed[1] */
+        uint32_t collision_test : 1;    /*!< Collision test */
+        uint32_t duplex_mode : 1;       /*!< Duplex mode:Full Duplex(1) and Half Duplex(0) */
+        uint32_t restart_auto_nego : 1; /*!< Restart auto-negotiation */
+        uint32_t isolate : 1;           /*!< Isolate the PHY from MII except the SMI interface */
+        uint32_t power_down : 1;        /*!< Power off PHY except SMI interface */
+        uint32_t en_auto_nego : 1;      /*!< Enable auto negotiation */
+        uint32_t speed_select : 1;      /*!< Select speed[0]: 100Mbps(1) and 10Mbps(0) */
+        uint32_t en_loopback : 1;       /*!< Enables transmit data to be routed to the receive path */
+        uint32_t reset : 1;             /*!< Reset PHY registers. This bit is self-clearing. */
+    };
+    uint32_t val;
+} bmcr_reg_t;
+
+typedef union {
+    struct {
+        uint32_t ext_capability : 1;       /*!< Extended register capability */
+        uint32_t jabber_detect : 1;        /*!< Jabber condition detected */
+        uint32_t link_status : 1;          /*!< Link status */
+        uint32_t auto_nego_ability : 1;    /*!< Auto negotiation ability */
+        uint32_t remote_fault : 1;         /*!< Remote fault detected */
+        uint32_t auto_nego_complete : 1;   /*!< Auto negotiation completed */
+        uint32_t mf_preamble_suppress : 1; /*!< Preamble suppression capability for management frame */
+        uint32_t reserved : 1;             /*!< Reserved */
+        uint32_t ext_status : 1;           /*!< Extended Status */
+        uint32_t base100_t2_hdx : 1;       /*!< 100Base-T2 Half Duplex capability */
+        uint32_t base100_t2_fdx : 1;       /*!< 100Base-T2 Full Duplex capability */
+        uint32_t base10_t_hdx : 1;         /*!< 10Base-T Half Duplex capability */
+        uint32_t base10_t_fdx : 1;         /*!< 10Base-T Full Duplex capability */
+        uint32_t base100_tx_hdx : 1;       /*!< 100Base-Tx Half Duplex capability */
+        uint32_t base100_tx_fdx : 1;       /*!< 100Base-Tx Full Duplex capability */
+        uint32_t based100_t4 : 1;          /*!< 100Base-T4 capability */
+    };
+    uint32_t val;
+} bmsr_reg_t;
+
+typedef union {
+    struct {
+        uint32_t protocol_select : 5;  /*!< Binary encoded selector supported by this PHY */
+        uint32_t base10_t : 1;         /*!< 10Base-T support */
+        uint32_t base10_t_fd : 1;      /*!< 10Base-T full duplex support */
+        uint32_t base100_tx : 1;       /*!< 100Base-TX support */
+        uint32_t base100_tx_fd : 1;    /*!< 100Base-TX full duplex support */
+        uint32_t base100_t4 : 1;       /*!< 100Base-T4 support */
+        uint32_t symmetric_pause : 1;  /*!< Symmetric pause support for full duplex links */
+        uint32_t asymmetric_pause : 1; /*!< Asymmetric pause support for full duplex links */
+        uint32_t reserved1 : 1;        /*!< Reserved */
+        uint32_t remote_fault : 1;     /*!< Advertise remote fault detection capability */
+        uint32_t acknowledge : 1;      /*!< Link partner ability data reception acknowledged */
+        uint32_t next_page : 1;        /*!< Next page indication, if set, next page transfer is desired */
+    };
+    uint32_t val;
+} anar_reg_t;
+
+typedef union {
+    struct {
+        uint32_t protocol_select : 5;  /*!< Link Partner’s binary encoded node selector */
+        uint32_t base10_t : 1;         /*!< 10Base-T support */
+        uint32_t base10_t_fd : 1;      /*!< 10Base-T full duplex support */
+        uint32_t base100_tx : 1;       /*!< 100Base-TX support */
+        uint32_t base100_tx_fd : 1;    /*!< 100Base-TX full duplex support */
+        uint32_t base100_t4 : 1;       /*!< 100Base-T4 support */
+        uint32_t symmetric_pause : 1;  /*!< Symmetric pause supported by Link Partner */
+        uint32_t asymmetric_pause : 1; /*!< Asymmetric pause supported by Link Partner */
+        uint32_t reserved : 1;         /*!< Reserved */
+        uint32_t remote_fault : 1;     /*!< Link partner is indicating a remote fault */
+        uint32_t acknowledge : 1;      /*!< Acknowledges from link partner */
+        uint32_t next_page : 1;        /*!< Next page indication */
+    };
+    uint32_t val;
+} anlpar_reg_t;
+
 #define BITS_PER_BYTE 8
 #define BITS_PER_LONG 32
 #define BIT_MASK(nr)  (1UL << ((nr) % BITS_PER_LONG))
@@ -2923,6 +2998,11 @@ void usbh_rtl8152_status_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV) {
     uint8_t reinit = 0;
     int ret = 0;
 
+    bmcr_reg_t bmcr = {0,};
+    bmsr_reg_t bmsr = {0,};
+    anar_reg_t anar = {0,};
+    anlpar_reg_t anlpar = {0,};
+
     while (1) {
         USB_LOG_DBG("Get connect status\r\n");
         ret = usbh_rtl8152_get_connect_status(&g_rtl8152_class);
@@ -2940,6 +3020,8 @@ void usbh_rtl8152_status_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV) {
         usb_osal_msleep(500);
 
         data = r8152_mdio_read(&g_rtl8152_class, MII_BMSR);
+        bmsr.val = data;
+
         link_status = (data & BMSR_LSTATUS) > 0 ? 1 : 0;
         if( lask_link_status != link_status ) {
             USB_LOG_DBG("RTL8152 link state change from %s to %s\r\n", lask_link_status ? "up" : "down", link_status ? "up" : "down");
@@ -2967,9 +3049,42 @@ void usbh_rtl8152_status_thread(CONFIG_USB_OSAL_THREAD_SET_ARGV) {
                     link_down_count = 0;
                 }
             }
+
+            if( link_status == 1 ) {
+                uint8_t speed = 0, duplex = 0;
+                bmcr.val = r8152_mdio_read(&g_rtl8152_class, MII_BMCR);;
+                anar.val = r8152_mdio_read(&g_rtl8152_class, MII_ADVERTISE);
+                anlpar.val = r8152_mdio_read(&g_rtl8152_class, MII_LPA);
+                USB_LOG_DBG("RTL8152 1 link is up, BMSR:0x%04lx, BMCR:0x%04lx, ANAR:0x%04lx, ANLPAR:0x%04lx\r\n", bmsr.val, bmcr.val, anar.val, anlpar.val);
+                USB_LOG_DBG("RTL8152 bmcr.en_auto_nego:%d\r\n", bmcr.en_auto_nego);
+                if (bmcr.en_auto_nego) {
+                    if (anar.base100_tx_fd && anlpar.base100_tx_fd) {
+                        speed = SPEED_100;
+                        duplex = DUPLEX_FULL;
+                    } else if (anar.base100_tx && anlpar.base100_tx) {
+                        speed = SPEED_100;
+                        duplex = DUPLEX_HALF;
+                    } else if (anar.base10_t_fd && anlpar.base10_t_fd) {
+                        speed = SPEED_10;
+                        duplex = DUPLEX_FULL;
+                    } else if (anar.base10_t && anlpar.base10_t) {
+                        speed = SPEED_10;
+                        duplex = DUPLEX_HALF;
+                    } else {
+                        USB_LOG_DBG("RTL8152 1 link is up, but speed and duplex is not supported\r\n");
+                    }
+                } else {
+                    speed = bmcr.speed_select ? SPEED_100 : SPEED_10;
+                    duplex = bmcr.duplex_mode ? DUPLEX_FULL : DUPLEX_HALF;
+                }
+                USB_LOG_DBG("RTL8152 1 link is up, Speed:%s, Duplex:%s\r\n", speed==SPEED_100 ? "100M" : "10M", duplex == DUPLEX_FULL ? "Full" : "Half");
+                (void)speed; // Avoid unused variable warning
+                (void)duplex; // Avoid unused variable warning
+            }
         }
         usb_osal_msleep(500);
     }
+    (void)bmsr; // Avoid unused variable warning
 }
 
 
@@ -3122,6 +3237,33 @@ int usbh_rtl8152_eth_tx(uint8_t *buf, uint32_t buflen)
 
     usbh_bulk_urb_fill(&g_rtl8152_class.bulkout_urb, g_rtl8152_class.hport, g_rtl8152_class.bulkout, g_rtl8152_tx_buffer, buflen + sizeof(struct tx_desc), USB_OSAL_WAITING_FOREVER, NULL, NULL);
     return usbh_submit_urb(&g_rtl8152_class.bulkout_urb);
+}
+
+int usbh_rtl8152_tally_get(struct usbh_rtl8152_tally_counter *tally) {
+    if( tally == NULL ) {
+        USB_LOG_ERR("tally is NULL\r\n");
+        return -USB_ERR_INVAL;
+    }
+
+    if (g_rtl8152_class.connect_status == false) {
+        USB_LOG_ERR("RTL8152 not connected\r\n");
+        return -USB_ERR_NOTCONN;
+    }
+    
+    memset(tally, 0, sizeof(struct usbh_rtl8152_tally_counter));
+    generic_ocp_read(&g_rtl8152_class, PLA_TALLYCNT, sizeof(struct usbh_rtl8152_tally_counter), tally, MCU_TYPE_PLA);
+    
+    USB_LOG_DBG("RTL8152 tally: tx_packets:%llu, rx_packets:%llu, tx_errors:%llu, rx_errors:%lu, rx_missed:%u, align_errors:%u, tx_one_collision:%lu, tx_multi_collision:%lu, rx_unicast:%llu, rx_broadcast:%llu, rx_multicast:%lu, tx_aborted:%u, tx_underrun:%u\r\n",
+            tally->tx_packets, tally->rx_packets, tally->tx_errors, tally->rx_errors,
+            tally->rx_missed, tally->align_errors, tally->tx_one_collision,
+            tally->tx_multi_collision, tally->rx_unicast, tally->rx_broadcast,
+            tally->rx_multicast, tally->tx_aborted, tally->tx_underrun);
+    return 0;
+}
+
+int usbh_rtl8152_tally_reset(void) {
+    rtl_tally_reset(&g_rtl8152_class);
+    return 0;
 }
 
 __WEAK void usbh_rtl8152_run(struct usbh_rtl8152 *rtl8152_class)
